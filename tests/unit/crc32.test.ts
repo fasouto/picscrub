@@ -15,8 +15,7 @@ describe('crc32', () => {
 
   it('should calculate CRC32 for binary data', () => {
     const data = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
-    const result = crc32(data);
-    expect(result).toBeGreaterThan(0);
+    expect(crc32(data)).toBe(0x515ad3cc);
   });
 
   it('should produce different results for different data', () => {
@@ -40,8 +39,7 @@ describe('crc32Png', () => {
       0x00, // interlace = none
     ]);
 
-    const result = crc32Png(chunkType, chunkData);
-    expect(result).toBeGreaterThan(0);
+    expect(crc32Png(chunkType, chunkData)).toBe(0x907753de);
   });
 });
 
