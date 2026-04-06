@@ -85,11 +85,15 @@ function processRemoval(data: Uint8Array, options: RemoveOptions): RemoveResult 
     throw new UnsupportedFormatError(format);
   }
 
-  // Get metadata types before removal
-  const removedMetadata = handler.getMetadataTypes(data);
+  // Get metadata types before and after removal to compute what was actually removed
+  const metadataBefore = handler.getMetadataTypes(data);
 
   // Remove metadata
   const cleanedData = handler.remove(data, options);
+
+  const metadataAfter = handler.getMetadataTypes(cleanedData);
+  const afterSet = new Set(metadataAfter);
+  const removedMetadata = metadataBefore.filter(type => !afterSet.has(type));
 
   // Detect if output format differs from input (e.g., RAW -> JPEG preview)
   let outputFormat: SupportedFormat | undefined;

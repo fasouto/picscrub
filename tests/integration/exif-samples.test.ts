@@ -110,6 +110,16 @@ describe('exif-samples: XMP + IPTC (BlueSquare)', () => {
     const cleanedAscii = buffer.toAscii(result.data);
     expect(cleanedAscii).not.toContain('ICC_PROFILE');
   });
+
+  it('should not report preserved ICC profile in removedMetadata', async () => {
+    const result = await removeMetadata(imageBytes, { preserveColorProfile: true });
+    expect(result.removedMetadata).not.toContain('ICC Profile');
+  });
+
+  it('should report ICC profile in removedMetadata when not preserved', async () => {
+    const result = await removeMetadata(imageBytes, { preserveColorProfile: false });
+    expect(result.removedMetadata).toContain('ICC Profile');
+  });
 });
 
 describe('exif-samples: Canon 40D', () => {
