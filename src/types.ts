@@ -17,11 +17,11 @@ export type SupportedFormat =
  * Options for metadata removal
  */
 export interface RemoveOptions {
-  /** Keep EXIF orientation tag (rotation info) */
+  /** Keep EXIF orientation tag (rotation info). Supported: JPEG, TIFF. */
   preserveOrientation?: boolean;
-  /** Keep ICC color profile */
+  /** Keep ICC color profile. Supported: JPEG, PNG, WebP. */
   preserveColorProfile?: boolean;
-  /** Keep copyright notice */
+  /** Keep copyright notice. Supported: JPEG, TIFF. */
   preserveCopyright?: boolean;
   /** SVG: Keep <title> element */
   preserveTitle?: boolean;

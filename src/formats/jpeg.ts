@@ -271,45 +271,135 @@ function getOrientationFromExif(segment: JpegSegment): number | null {
 }
 
 /**
- * Create minimal EXIF segment with only orientation
+ * Extract copyright string from EXIF segment
  */
-function createOrientationExif(orientation: number): Uint8Array {
-  // Minimal EXIF with just orientation tag
-  // APP1 marker (2) + length (2) + "Exif\0\0" (6) + TIFF header (8) + IFD0
+function getCopyrightFromExif(segment: JpegSegment): string | null {
+  if (!isExifSegment(segment)) {
+    return null;
+  }
+
+  try {
+    const exifStart = 10;
+    if (segment.data.length < exifStart + 8) {
+      return null;
+    }
+
+    const byteOrder = buffer.toAscii(segment.data, exifStart, 2);
+    const littleEndian = byteOrder === 'II';
+
+    const ifdOffset = dataview.readUint32(segment.data, exifStart + 4, littleEndian);
+    const ifdStart = exifStart + ifdOffset;
+
+    if (ifdStart + 2 > segment.data.length) {
+      return null;
+    }
+
+    const numEntries = dataview.readUint16(segment.data, ifdStart, littleEndian);
+
+    for (let i = 0; i < numEntries; i++) {
+      const entryOffset = ifdStart + 2 + i * 12;
+      if (entryOffset + 12 > segment.data.length) {
+        break;
+      }
+
+      const tag = dataview.readUint16(segment.data, entryOffset, littleEndian);
+      if (tag === 0x8298) {
+        // Copyright tag - type ASCII
+        const count = dataview.readUint32(segment.data, entryOffset + 4, littleEndian);
+        let valueStart: number;
+        if (count <= 4) {
+          valueStart = entryOffset + 8;
+        } else {
+          valueStart = exifStart + dataview.readUint32(segment.data, entryOffset + 8, littleEndian);
+        }
+        if (valueStart + count > segment.data.length) {
+          return null;
+        }
+        // Trim null terminator
+        const end = segment.data[valueStart + count - 1] === 0 ? count - 1 : count;
+        return buffer.toAscii(segment.data, valueStart, end);
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Create minimal EXIF segment with preserved tags (orientation and/or copyright)
+ */
+function createPreservedExif(orientation: number | null, copyright: string | null): Uint8Array {
+  const entries: Uint8Array[] = [];
+  const extraData: Uint8Array[] = [];
+  let entryCount = 0;
+
+  // Calculate where extra data starts (after IFD entries + next IFD pointer)
+  // We'll calculate this after counting entries
+  const calcExtraOffset = (count: number) => 8 + 2 + count * 12 + 4; // TIFF header + count + entries + next IFD
+
+  // Build entries list first to count them
+  if (orientation !== null) entryCount++;
+  if (copyright !== null) entryCount++;
+
+  let extraOffset = calcExtraOffset(entryCount);
+
+  // Orientation entry (tag 0x0112, SHORT)
+  if (orientation !== null) {
+    const entry = new Uint8Array(12);
+    entry[0] = 0x01;
+    entry[1] = 0x12; // tag
+    entry[2] = 0x00;
+    entry[3] = 0x03; // SHORT
+    entry[4] = 0x00;
+    entry[5] = 0x00;
+    entry[6] = 0x00;
+    entry[7] = 0x01; // count
+    entry[8] = (orientation >> 8) & 0xff;
+    entry[9] = orientation & 0xff;
+    entries.push(entry);
+  }
+
+  // Copyright entry (tag 0x8298, ASCII)
+  if (copyright !== null) {
+    const copyrightBytes = buffer.fromAscii(copyright + '\x00');
+    const entry = new Uint8Array(12);
+    entry[0] = 0x82;
+    entry[1] = 0x98; // tag
+    entry[2] = 0x00;
+    entry[3] = 0x02; // ASCII
+    // count (big-endian)
+    entry[4] = (copyrightBytes.length >> 24) & 0xff;
+    entry[5] = (copyrightBytes.length >> 16) & 0xff;
+    entry[6] = (copyrightBytes.length >> 8) & 0xff;
+    entry[7] = copyrightBytes.length & 0xff;
+
+    if (copyrightBytes.length <= 4) {
+      entry.set(copyrightBytes, 8);
+    } else {
+      // Offset to extra data (big-endian)
+      entry[8] = (extraOffset >> 24) & 0xff;
+      entry[9] = (extraOffset >> 16) & 0xff;
+      entry[10] = (extraOffset >> 8) & 0xff;
+      entry[11] = extraOffset & 0xff;
+      extraData.push(copyrightBytes);
+      extraOffset += copyrightBytes.length;
+    }
+    entries.push(entry);
+  }
+
   const tiffHeader = new Uint8Array([
-    0x4d,
-    0x4d, // MM (big-endian)
-    0x00,
-    0x2a, // TIFF magic
-    0x00,
-    0x00,
-    0x00,
-    0x08, // IFD0 offset
+    0x4d, 0x4d, // MM (big-endian)
+    0x00, 0x2a, // TIFF magic
+    0x00, 0x00, 0x00, 0x08, // IFD0 offset
   ]);
 
-  const ifd0 = new Uint8Array([
-    0x00,
-    0x01, // 1 entry
-    0x01,
-    0x12, // Orientation tag
-    0x00,
-    0x03, // SHORT type
-    0x00,
-    0x00,
-    0x00,
-    0x01, // 1 value
-    (orientation >> 8) & 0xff,
-    orientation & 0xff,
-    0x00,
-    0x00, // value (padded)
-    0x00,
-    0x00,
-    0x00,
-    0x00, // Next IFD (none)
-  ]);
+  const ifdCount = new Uint8Array([(entryCount >> 8) & 0xff, entryCount & 0xff]);
+  const nextIfd = new Uint8Array([0x00, 0x00, 0x00, 0x00]);
 
   const exifId = buffer.fromAscii('Exif\x00\x00');
-  const content = buffer.concat(exifId, tiffHeader, ifd0);
+  const content = buffer.concat(exifId, tiffHeader, ifdCount, ...entries, nextIfd, ...extraData);
   const length = content.length + 2;
 
   const segment = new Uint8Array(length + 2);
@@ -375,30 +465,31 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
   const segments = parseSegments(data);
   const removedMetadata: string[] = [];
   let orientation: number | null = null;
+  let copyright: string | null = null;
 
-  // Extract orientation if we need to preserve it
-  if (options.preserveOrientation === true) {
-    for (const segment of segments) {
-      if (isExifSegment(segment)) {
+  // Extract values to preserve from EXIF before stripping
+  for (const segment of segments) {
+    if (isExifSegment(segment)) {
+      if (options.preserveOrientation === true && orientation === null) {
         orientation = getOrientationFromExif(segment);
-        if (orientation !== null) {
-          break;
-        }
+      }
+      if (options.preserveCopyright === true && copyright === null) {
+        copyright = getCopyrightFromExif(segment);
       }
     }
   }
 
   // Filter segments
   const keptSegments: Uint8Array[] = [FILE_SIGNATURES.JPEG_SOI];
-  let insertedOrientation = false;
+  let insertedPreserved = false;
 
   for (const segment of segments) {
     if (shouldKeepSegment(segment, options)) {
       if (segment.marker === MARKERS.SOS) {
-        // Before SOS, insert orientation EXIF if needed
-        if (options.preserveOrientation === true && orientation !== null && !insertedOrientation) {
-          keptSegments.push(createOrientationExif(orientation));
-          insertedOrientation = true;
+        // Before SOS, insert preserved EXIF tags if needed
+        if ((orientation !== null || copyright !== null) && !insertedPreserved) {
+          keptSegments.push(createPreservedExif(orientation, copyright));
+          insertedPreserved = true;
         }
       }
 
