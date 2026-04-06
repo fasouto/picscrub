@@ -337,11 +337,15 @@ function createPreservedExif(orientation: number | null, copyright: string | nul
 
   // Calculate where extra data starts (after IFD entries + next IFD pointer)
   // We'll calculate this after counting entries
-  const calcExtraOffset = (count: number) => 8 + 2 + count * 12 + 4; // TIFF header + count + entries + next IFD
+  const calcExtraOffset = (count: number): number => 8 + 2 + count * 12 + 4; // TIFF header + count + entries + next IFD
 
   // Build entries list first to count them
-  if (orientation !== null) entryCount++;
-  if (copyright !== null) entryCount++;
+  if (orientation !== null) {
+    entryCount++;
+  }
+  if (copyright !== null) {
+    entryCount++;
+  }
 
   let extraOffset = calcExtraOffset(entryCount);
 
@@ -390,9 +394,14 @@ function createPreservedExif(orientation: number | null, copyright: string | nul
   }
 
   const tiffHeader = new Uint8Array([
-    0x4d, 0x4d, // MM (big-endian)
-    0x00, 0x2a, // TIFF magic
-    0x00, 0x00, 0x00, 0x08, // IFD0 offset
+    0x4d,
+    0x4d, // MM (big-endian)
+    0x00,
+    0x2a, // TIFF magic
+    0x00,
+    0x00,
+    0x00,
+    0x08, // IFD0 offset
   ]);
 
   const ifdCount = new Uint8Array([(entryCount >> 8) & 0xff, entryCount & 0xff]);
