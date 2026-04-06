@@ -1,6 +1,6 @@
 {
   "name": "picscrub",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Remove EXIF, GPS, and other metadata from images. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, and RAW formats.",
   "type": "module",
   "main": "dist/picscrub.cjs",
