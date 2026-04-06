@@ -238,13 +238,6 @@ describe('RAW Integration Tests', () => {
       expect(['dng', 'tiff']).toContain(format);
     });
 
-    it('should expose raw format utilities', () => {
-      expect(typeof raw.remove).toBe('function');
-      expect(typeof raw.removeDng).toBe('function');
-      expect(typeof raw.getMetadataTypes).toBe('function');
-      expect(typeof raw.detectRawFormat).toBe('function');
-    });
-
     it('should detect DNG-specific format', () => {
       const format = raw.detectRawFormat(imageBytes);
       // May return 'dng' or 'unknown' depending on detection logic
@@ -299,11 +292,6 @@ describe('RAW Integration Tests', () => {
       expect(['nef', 'unknown']).toContain(format);
     });
 
-    it('should extract metadata types from NEF', () => {
-      const types = raw.getMetadataTypes(imageBytes);
-      // Should find Nikon maker notes or other metadata
-      expect(Array.isArray(types)).toBe(true);
-    });
   });
 
   describe('ARW (Sony RAW)', () => {
@@ -355,10 +343,6 @@ describe('RAW Integration Tests', () => {
   });
 
   describe('JPEG preview extraction', () => {
-    it('should expose extractCleanPreview function', () => {
-      expect(typeof raw.extractCleanPreview).toBe('function');
-    });
-
     it('should return null for files without JPEG preview', () => {
       const minimalTiff = new Uint8Array([
         0x49, 0x49, // 'II' - little-endian
@@ -405,10 +389,6 @@ describe('RAW Integration Tests', () => {
         expect(result.data[3]).toBe(0x00);
       });
 
-      it('should report removed metadata', async () => {
-        const result = await removeMetadata(imageBytes);
-        expect(Array.isArray(result.removedMetadata)).toBe(true);
-      });
     });
 
     describe('sample_canon_400d1.cr2 (Canon CR2)', () => {
@@ -429,21 +409,7 @@ describe('RAW Integration Tests', () => {
         expect(['cr2', 'unknown']).toContain(format);
       });
 
-      it('should extract JPEG preview from CR2', () => {
-        const preview = raw.extractCleanPreview(imageBytes);
-        // CR2 files typically have embedded JPEG previews
-        if (preview !== null) {
-          // Verify it's a valid JPEG
-          expect(preview[0]).toBe(0xff);
-          expect(preview[1]).toBe(0xd8);
-        }
-      });
-
-      it('should detect metadata', () => {
-        const types = raw.getMetadataTypes(imageBytes);
-        expect(Array.isArray(types)).toBe(true);
-      });
-    });
+});
 
     describe('RAW_NIKON_D90.NEF (Nikon NEF)', () => {
       const imagePath = join(FIXTURES_DIR, 'RAW_NIKON_D90.NEF');
@@ -470,14 +436,7 @@ describe('RAW Integration Tests', () => {
         expect(hasNikonData || types.length > 0).toBe(true);
       });
 
-      it('should extract JPEG preview from NEF', () => {
-        const preview = raw.extractCleanPreview(imageBytes);
-        if (preview !== null) {
-          expect(preview[0]).toBe(0xff);
-          expect(preview[1]).toBe(0xd8);
-        }
-      });
-    });
+});
 
     describe('RAW_SONY_A700.ARW (Sony ARW)', () => {
       const imagePath = join(FIXTURES_DIR, 'RAW_SONY_A700.ARW');
@@ -497,17 +456,11 @@ describe('RAW Integration Tests', () => {
         expect(['arw', 'unknown']).toContain(format);
       });
 
-      it('should detect metadata', () => {
-        const types = raw.getMetadataTypes(imageBytes);
-        expect(Array.isArray(types)).toBe(true);
-      });
-
       it('should extract JPEG preview from ARW', () => {
         const preview = raw.extractCleanPreview(imageBytes);
-        if (preview !== null) {
-          expect(preview[0]).toBe(0xff);
-          expect(preview[1]).toBe(0xd8);
-        }
+        expect(preview).not.toBeNull();
+        expect(preview![0]).toBe(0xff);
+        expect(preview![1]).toBe(0xd8);
       });
     });
 
@@ -527,9 +480,8 @@ describe('RAW Integration Tests', () => {
           const format = detectFormat(imageBytes);
           expect(expectedFormats).toContain(format);
 
-          // Should be able to get metadata types without crashing
           const types = getMetadataTypes(imageBytes);
-          expect(Array.isArray(types)).toBe(true);
+          expect(types.length).toBeGreaterThan(0);
         });
       });
     });

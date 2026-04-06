@@ -200,14 +200,8 @@ describe('exif-samples: HEIF sample', () => {
   });
 
   it('should remove XMP data', async () => {
-    // Original has XMP with ExifTool info
-    const originalAscii = buffer.toAscii(imageBytes);
-    const hasXmp = originalAscii.includes('ExifTool') || originalAscii.includes('xmlns');
-
-    if (hasXmp) {
-      const result = await removeMetadata(imageBytes);
-      const cleanedAscii = buffer.toAscii(result.data);
-      expect(cleanedAscii).not.toContain('ExifTool');
-    }
+    const result = await removeMetadata(imageBytes);
+    const cleanedAscii = buffer.toAscii(result.data);
+    expect(cleanedAscii).not.toContain('ExifTool');
   });
 });

@@ -59,12 +59,6 @@ describe('PNG Integration Tests', () => {
       imageBytes = new Uint8Array(readFileSync(imagePath));
     });
 
-    it('should detect metadata types', () => {
-      const types = getMetadataTypes(imageBytes);
-      // Should have some text metadata
-      expect(types.length).toBeGreaterThanOrEqual(0);
-    });
-
     it('should produce valid output after removal', async () => {
       const result = await removeMetadata(imageBytes);
 

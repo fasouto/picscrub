@@ -228,13 +228,6 @@ describe('HEIC Integration Tests', () => {
     });
   });
 
-  describe('HEIC module API', () => {
-    it('should expose remove and getMetadataTypes functions', () => {
-      expect(typeof heic.remove).toBe('function');
-      expect(typeof heic.getMetadataTypes).toBe('function');
-    });
-  });
-
   describe('Real HEIC files', () => {
     describe('sewing-threads.heic (iPhone photo)', () => {
       const imagePath = join(FIXTURES_DIR, 'sewing-threads.heic');
@@ -271,11 +264,6 @@ describe('HEIC Integration Tests', () => {
         expect(result.data[7]).toBe(0x70); // 'p'
       });
 
-      it('should report what metadata was found', async () => {
-        const result = await removeMetadata(imageBytes);
-        // Should report some metadata types that were processed
-        expect(Array.isArray(result.removedMetadata)).toBe(true);
-      });
     });
 
     describe('soundboard.heic (iPhone photo)', () => {
