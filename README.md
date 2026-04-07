@@ -1,110 +1,72 @@
+<div align="center">
+
 # PicScrub
 
-> Remove EXIF, GPS, and other metadata from images. Fast, lossless, zero dependencies.
+**Strip hidden metadata from images before sharing.**
+GPS coordinates, device info, timestamps, thumbnails. Gone.
+Fast, lossless, zero dependencies.
 
-**[Try it online at picscrub.com](https://picscrub.com)** — no install needed, runs in your browser.
-
-[![npm version](https://badge.fury.io/js/picscrub.svg)](https://badge.fury.io/js/picscrub)
+[![npm version](https://img.shields.io/npm/v/picscrub)](https://www.npmjs.com/package/picscrub)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/picscrub)](https://bundlephobia.com/package/picscrub)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Why PicScrub?
+[Try it online at picscrub.com](https://picscrub.com) · no install needed, runs in your browser.
 
-When you share photos online, they often contain hidden metadata that reveals:
-- **GPS coordinates** - Exact location where the photo was taken
-- **Device information** - Camera model, serial numbers
-- **Timestamps** - When the photo was taken
-- **Personal info** - Author name, copyright, comments
-- **Thumbnails** - Embedded preview images that may contain edited-out content
+</div>
 
-PicScrub removes all this metadata through direct binary manipulation, without re-encoding the image.
+---
 
-## Features
-
-- **9 formats** - JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, DNG, RAW
-- **Fast** - Binary manipulation, no re-encoding
-- **Lossless** - Preserves image quality perfectly
-- **Tree-shakeable** - Import only what you need (~50KB core)
-- **TypeScript** - Full type definitions included
-- **Zero dependencies** - No external runtime dependencies
-
-## Installation
+## Install
 
 ```bash
 npm install picscrub
 ```
 
-## Quick Start
+## Usage
 
 ```typescript
 import { removeMetadata } from 'picscrub';
 
-// From file input
-const fileInput = document.querySelector('input[type="file"]');
-fileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  const buffer = await file.arrayBuffer();
+const result = await removeMetadata(imageBytes);
 
-  const result = await removeMetadata(new Uint8Array(buffer));
+console.log(result.format);          // 'jpeg'
+console.log(result.removedMetadata); // ['EXIF', 'XMP', 'ICC Profile']
+console.log(result.cleanedSize);     // smaller than result.originalSize
 
-  console.log(`Format: ${result.format}`);
-  console.log(`Removed: ${result.removedMetadata.join(', ')}`);
-  console.log(`Size: ${result.originalSize} -> ${result.cleanedSize} bytes`);
+// result.data is a clean Uint8Array ready to use
+```
 
-  // Download cleaned image
-  const blob = new Blob([result.data], { type: `image/${result.format}` });
-  const url = URL.createObjectURL(blob);
-  // ... use url for download or display
+### With options
+
+```typescript
+const result = await removeMetadata(imageBytes, {
+  preserveOrientation: true,   // keep EXIF rotation
+  preserveColorProfile: true,  // keep ICC profile
+  preserveCopyright: true,     // keep copyright notice
 });
 ```
 
-## Node.js / CLI
-
-### File API
-
-Process image files directly on disk:
+### Node.js file API
 
 ```typescript
 import { processFile } from 'picscrub/node';
 
-// Creates photo-clean.jpg alongside the original
-const result = await processFile('photo.jpg');
-
-// Overwrite the original
-await processFile('photo.jpg', { inPlace: true });
-
-// Custom output path
-await processFile('photo.jpg', { outputPath: 'clean/photo.jpg' });
-
-// Custom suffix
-await processFile('photo.jpg', { suffix: '-stripped' });
-
-// With preserve options
-await processFile('photo.jpg', {
-  preserveOrientation: true,
-  preserveColorProfile: true,
-});
+await processFile('photo.jpg');                          // creates photo-clean.jpg
+await processFile('photo.jpg', { inPlace: true });       // overwrites original
+await processFile('photo.jpg', { outputPath: 'out.jpg' });
 ```
 
 ### CLI
 
 ```bash
-# Process files (creates *-clean.* versions)
-npx picscrub photo.jpg
-
-# Process multiple files
-npx picscrub *.jpg
-
-# Overwrite originals
-npx picscrub -i photo.jpg
-
-# Custom output
+npx picscrub photo.jpg           # creates photo-clean.jpg
+npx picscrub *.jpg               # batch process
+npx picscrub -i photo.jpg        # overwrite original
 npx picscrub -o clean.jpg photo.jpg
-
-# Preserve orientation
-npx picscrub --preserve-orientation photo.jpg
 ```
 
-Options:
+<details>
+<summary>All CLI flags</summary>
 
 | Flag | Description |
 |------|-------------|
@@ -118,93 +80,95 @@ Options:
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
+</details>
+
+## Supported Formats
+
+| Format | What gets removed |
+|--------|-------------------|
+| **JPEG** | EXIF, XMP, IPTC, ICC Profile, Comments, Adobe |
+| **PNG** | tEXt, iTXt, zTXt, eXIf, iCCP |
+| **WebP** | EXIF, XMP, ICCP |
+| **GIF** | Comments, XMP, Application Extensions |
+| **SVG** | metadata, RDF, comments, editor namespaces |
+| **TIFF** | EXIF, GPS, XMP, ICC Profile |
+| **HEIC** | EXIF, GPS, Thumbnails, MakerNotes \* |
+| **DNG** | Full TIFF-based metadata |
+| **RAW** | Extracts clean JPEG preview \*\* |
+
+All formats are lossless. Pixel data is never touched.
+\*HEIC overwrites metadata with zeros rather than removing it (file size stays the same).
+\*\*Proprietary RAW formats (CR2, NEF, ARW) return the cleaned embedded JPEG preview.
+
 ## API Reference
 
 ### `removeMetadata(input, options?)`
 
-Remove metadata from an image.
-
-```typescript
-const result = await removeMetadata(imageBytes, {
-  preserveOrientation: true,   // Keep EXIF orientation (rotation)
-  preserveColorProfile: true,  // Keep ICC color profile
-  preserveCopyright: true,     // Keep copyright notice
-  preserveTitle: true,         // SVG: Keep <title>
-  preserveDescription: true,   // SVG: Keep <desc>
-});
-```
-
-**Returns:**
+Accepts `Uint8Array`, `ArrayBuffer`, or base64 data URL. Returns:
 
 ```typescript
 interface RemoveResult {
-  data: Uint8Array;          // Cleaned image
-  format: SupportedFormat;   // Detected format
-  originalSize: number;      // Before (bytes)
-  cleanedSize: number;       // After (bytes)
-  removedMetadata: string[]; // What was removed
+  data: Uint8Array;          // cleaned image
+  format: SupportedFormat;   // detected format
+  originalSize: number;      // before (bytes)
+  cleanedSize: number;       // after (bytes)
+  removedMetadata: string[]; // what was actually removed
 }
 ```
 
-### `detectFormat(data)`
-
-Detect image format from binary data.
+### `detectFormat(data)` / `getMetadataTypes(data)`
 
 ```typescript
-import { detectFormat } from 'picscrub';
+import { detectFormat, getMetadataTypes } from 'picscrub';
 
-const format = detectFormat(imageBytes);
-// 'jpeg' | 'png' | 'webp' | 'gif' | 'svg' | 'tiff' | 'heic' | 'dng' | 'raw' | 'unknown'
+detectFormat(imageBytes);      // 'jpeg' | 'png' | 'webp' | ... | 'unknown'
+getMetadataTypes(imageBytes);  // ['EXIF', 'XMP', 'ICC Profile']
 ```
 
-### `getMetadataTypes(data)`
-
-Get list of metadata types without removing them.
+### Format-specific handlers
 
 ```typescript
-import { getMetadataTypes } from 'picscrub';
+import { jpeg, png, webp, gif, svg, tiff, heic, raw } from 'picscrub';
 
-const types = getMetadataTypes(imageBytes);
-// ['EXIF', 'XMP', 'ICC Profile', 'GPS']
+const cleaned = jpeg.remove(jpegBytes, { preserveOrientation: true });
 ```
 
-## Supported Formats
+<details>
+<summary>Preserve options by format</summary>
 
-| Format | Metadata Removed | Quality Impact |
-|--------|------------------|----------------|
-| **JPEG** | EXIF, XMP, IPTC, ICC Profile, Comments, Adobe | None |
-| **PNG** | tEXt, iTXt, zTXt, eXIf, iCCP | None |
-| **WebP** | EXIF, XMP, ICCP | None |
-| **GIF** | Comments, XMP, Application Extensions | None |
-| **SVG** | metadata, RDF, comments, editor namespaces | None |
-| **TIFF** | EXIF, GPS, XMP, ICC Profile | None |
-| **HEIC** | EXIF, GPS, Thumbnails, MakerNotes | None* |
-| **DNG** | Full TIFF-based metadata | None |
-| **RAW** | Extracts clean JPEG preview | Preview only |
+| Option | JPEG | PNG | WebP | TIFF | SVG |
+|--------|------|-----|------|------|-----|
+| `preserveOrientation` | Yes | - | - | Yes | - |
+| `preserveColorProfile` | Yes | Yes | Yes | Yes | - |
+| `preserveCopyright` | Yes | - | - | Yes | - |
+| `preserveTitle` | - | - | - | - | Yes |
+| `preserveDescription` | - | - | - | - | Yes |
 
-*HEIC uses lossless anonymization - metadata is overwritten with zeros rather than removed.
+</details>
 
 ## Known Limitations
 
-### TIFF Format
+<details>
+<summary>TIFF</summary>
 
-- Basic TIFF files are fully supported
-- Complex TIFF structures may have limitations:
-  - **Multi-page TIFFs**: Only the first IFD is processed
-  - **Tiled images**: May not preserve all tile offsets correctly
-  - **Complex offset chains**: Files with multiple IFDs and intricate offset dependencies may not process correctly
-- **Recommendation**: Test with your specific TIFF files before production use
+- Multi-page TIFFs: only the first IFD is processed
+- Tiled images may not preserve all tile offsets correctly
+- Test with your specific TIFF files before production use
 
-### HEIC Format
+</details>
 
-- Uses "lossless anonymization" approach for safety
-- **Metadata is overwritten with zeros**, not removed
-- File size remains the same (metadata bytes become zeros)
+<details>
+<summary>HEIC</summary>
+
+- Metadata is overwritten with zeros, not removed. File size stays the same
 - Image data (HEVC stream) is completely preserved
 - Embedded thumbnails are destroyed (overwritten with pattern data)
 - This approach ensures file structure integrity without complex offset recalculation
 
-### RAW Formats
+</details>
+
+<details>
+<summary>RAW formats</summary>
 
 | Format | Handling | Output |
 |--------|----------|--------|
@@ -213,86 +177,32 @@ const types = getMetadataTypes(imageBytes);
 | **NEF** (Nikon) | JPEG preview extraction | Clean JPEG |
 | **ARW** (Sony) | JPEG preview extraction | Clean JPEG |
 
-- **DNG**: Fully supported using TIFF processing (DNG is TIFF-based)
-- **Proprietary formats** (CR2, NEF, ARW): Returns cleaned embedded JPEG preview
-  - Original RAW sensor data is not preserved in output
-  - Full-resolution JPEG is extracted from the embedded preview
-  - Use this for sharing previews, not for archiving RAW files
+Proprietary formats (CR2, NEF, ARW) return the cleaned embedded JPEG preview. Original RAW sensor data is not preserved. Use for sharing previews, not for archiving.
+
+</details>
 
 ## How It Works
 
-PicScrub operates directly on the binary structure of image files:
+PicScrub operates directly on binary file structures. No re-encoding, no quality loss.
 
-- **JPEG**: Removes APP1-APP14 segments (EXIF, XMP, IPTC, ICC, Comments)
-- **PNG**: Filters out text chunks (tEXt, iTXt, zTXt) and EXIF chunks
-- **WebP**: Removes EXIF/XMP chunks and updates VP8X header
-- **GIF**: Removes comment and application extension blocks
-- **SVG**: Regex-based parsing, removes metadata elements and editor attributes
-- **TIFF**: Filters IFD entries to remove metadata tags
-- **HEIC**: Overwrites EXIF/thumbnails with zeros (preserves structure)
-
-No image re-encoding occurs - pixel data is never touched.
-
-## Advanced Usage
-
-### Format-Specific Handlers
-
-```typescript
-import { jpeg, png, webp, gif, svg, tiff, heic, raw } from 'picscrub';
-
-// Use format-specific handlers directly
-const cleaned = jpeg.remove(jpegBytes, { preserveOrientation: true });
-```
-
-### File Signatures
-
-```typescript
-import { FILE_SIGNATURES } from 'picscrub';
-
-// Access magic bytes for format detection
-console.log(FILE_SIGNATURES.JPEG); // Uint8Array([0xff, 0xd8, 0xff])
-console.log(FILE_SIGNATURES.PNG);  // Uint8Array([0x89, 0x50, ...])
-```
-
-### Binary Utilities
-
-```typescript
-import { buffer, dataview, crc32 } from 'picscrub';
-
-// Low-level binary operations
-const data = buffer.concat(header, body, footer);
-const value = dataview.readUint32BE(data, offset);
-const checksum = crc32(data);
-```
+| Format | Technique |
+|--------|-----------|
+| JPEG | Removes APP1–APP14 segments |
+| PNG | Filters metadata chunks (tEXt, iTXt, zTXt, eXIf) |
+| WebP | Removes EXIF/XMP chunks, updates VP8X header |
+| GIF | Removes comment and application extension blocks |
+| SVG | Regex-based removal of metadata elements and editor attributes |
+| TIFF | Filters IFD entries, zeros out removed data |
+| HEIC | Overwrites EXIF/thumbnails with zeros |
 
 ## Browser Support
 
-- Chrome 89+
-- Firefox 89+
-- Safari 15+
-- Edge 89+
-
-Requires `TextEncoder`, `TextDecoder`, and `Uint8Array` support.
-
-## Security Considerations
-
-- Input validation prevents buffer overflow attacks
-- No `eval()` or `new Function()` used
-- Safe for use with user-uploaded content
+Chrome 89+ · Firefox 89+ · Safari 15+ · Edge 89+
 
 ## Acknowledgments
 
-This project is a modernized fork of [exif-library](https://github.com/hMatoba/exif-library) by [@hMatoba](https://github.com/hMatoba). The original library provided excellent JPEG/PNG/WebP EXIF handling that served as the foundation.
-
-**What's new:**
-- Modern TypedArray-based binary handling (no string manipulation)
-- Added GIF, SVG, TIFF, HEIC, and DNG/RAW support
-- Complete metadata removal (XMP, IPTC, ICC profiles, comments)
-- Lossless HEIC anonymization
-- TypeScript strict mode with full type definitions
-- Comprehensive test suite
-
+Modernized fork of [exif-library](https://github.com/hMatoba/exif-library) by [@hMatoba](https://github.com/hMatoba), with added support for GIF, SVG, TIFF, HEIC, DNG/RAW, TypeScript strict mode, and comprehensive metadata removal.
 
 ## License
 
-MIT - see [LICENSE](LICENSE) for details.
+[MIT](LICENSE)
