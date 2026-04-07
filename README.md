@@ -231,7 +231,7 @@ PicScrub operates directly on the binary structure of image files:
 - **TIFF**: Filters IFD entries to remove metadata tags
 - **HEIC**: Overwrites EXIF/thumbnails with zeros (preserves structure)
 
-No image re-encoding ocurrs - pixel data is never touched.
+No image re-encoding occurs - pixel data is never touched.
 
 ## Advanced Usage
 
